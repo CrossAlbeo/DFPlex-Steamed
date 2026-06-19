@@ -9,3 +9,6 @@ df.tar
 df/
 save*
 release/
+
+# Node tooling (client/ and bridge/)
+node_modules/

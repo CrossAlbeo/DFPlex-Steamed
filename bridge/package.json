@@ -1,0 +1,15 @@
+{
+  "name": "dfplex-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev bridge: serves the dfplex client and streams fortress state over WebSocket (mock now, RemoteFortressReader next)",
+  "scripts": {
+    "start": "node bridge.mjs",
+    "test": "node test/ws-smoke.mjs"
+  },
+  "dependencies": {
+    "protobufjs": "^8.6.4",
+    "ws": "^8.18.0"
+  }
+}
