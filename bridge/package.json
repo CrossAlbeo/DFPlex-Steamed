@@ -9,6 +9,7 @@
     "test": "node test/ws-smoke.mjs"
   },
   "dependencies": {
+    "protobufjs": "^8.6.4",
     "ws": "^8.18.0"
   }
 }
