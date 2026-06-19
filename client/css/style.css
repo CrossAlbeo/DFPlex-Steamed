@@ -1,0 +1,84 @@
+:root {
+  --bg: #0b0b0b;
+  --panel: #161616;
+  --ink: #d8d8d8;
+  --muted: #888;
+  --accent: #ffe34d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.4 "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace;
+}
+
+#view {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  cursor: crosshair;
+}
+
+#toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(22, 22, 22, 0.9);
+  border-bottom: 1px solid #2a2a2a;
+}
+
+#toolbar strong {
+  color: var(--accent);
+}
+
+#toolbar .help {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+#toolbar select,
+#toolbar input,
+#toolbar button {
+  background: #111;
+  color: var(--ink);
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+#toolbar button {
+  cursor: pointer;
+}
+
+#status {
+  color: var(--muted);
+}
+
+#hud {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 4px 10px;
+  background: rgba(22, 22, 22, 0.85);
+  border-top: 1px solid #2a2a2a;
+  color: var(--muted);
+  white-space: pre;
+}

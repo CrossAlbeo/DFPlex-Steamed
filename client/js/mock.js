@@ -128,7 +128,7 @@ export function buildWorld(seed = 1234) {
       y: sy,
       z,
       name: names[i],
-      glyph: TILE.WALL, // rendered as a solid glyph; color distinguishes it
+      ch: "☺", // classic DF dwarf glyph
       color: 14, // yellow
     });
   }

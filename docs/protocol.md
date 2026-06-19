@@ -47,7 +47,7 @@ The full set of visible units (mock/early bridge send the whole list; later we d
 {
   "type": "units",
   "list": [
-    { "id": 101, "x": 10, "y": 12, "z": 3, "name": "Urist McMiner", "glyph": 2, "color": 14 }
+    { "id": 101, "x": 10, "y": 12, "z": 3, "name": "Urist McMiner", "ch": "☺", "color": 14 }
   ]
 }
 ```
