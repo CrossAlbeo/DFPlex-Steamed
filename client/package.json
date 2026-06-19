@@ -1,0 +1,7 @@
+{
+  "name": "dfplex-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "dfplex web client (DF 53.x rewrite) — renders fortress state from the dfplex protocol"
+}
