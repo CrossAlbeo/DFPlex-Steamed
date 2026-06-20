@@ -36,22 +36,25 @@ function setStatus(text) {
   statusEl.textContent = text;
 }
 
-// ---- order menu: a row of category buttons along the bottom (Digging orders, Construction, …);
-// clicking one opens its submenu of DF-style tool boxes. Each tool carries the op it sends
-// (designate vs build) and how it places (tileMode). Dig tools come from designations.js; build
-// categories from buildings.js. New build categories slot in with no UI changes. ----
+// ---- order menu: a row of top-level group buttons along the bottom. A group is either a *leaf*
+// (Digging orders — its tool boxes show directly) or a *branch* (Build — opening it lists the build
+// sub-categories, and picking one descends to that category's tool boxes with a back chip). Each
+// tool carries the op it sends (designate vs build) and how it places (tileMode). Dig tools come
+// from designations.js; build categories from buildings.js, so every new build category in step 4
+// appears under Build with no UI change. ----
 const DIG_ORDERS = ORDERS.map((o) => ({
   op: "designate", kind: o.kind, label: o.label, glyph: o.glyph, accent: o.accent, hotkey: o.hotkey, tileMode: "rect",
 }));
 const CATEGORIES = [
   { glyph: "⛏", label: "Digging orders", accent: "#e89628", orders: DIG_ORDERS },
-  ...BUILD_CATEGORIES,
+  { glyph: "▣", label: "Build", accent: "#9aa0a6", children: BUILD_CATEGORIES },
 ];
 
 let currentTool = DIG_ORDERS[0];
-let openCat = -1; // index of the category whose submenu is open, or -1 when collapsed
-const orderButtons = new Map(); // order object -> its submenu button (only for the open category)
-const catButtons = []; // per category: { btn, current, caret }
+let openCat = -1; // open top-level group, or -1 when collapsed
+let openSub = -1; // within an open branch group: open sub-category, or -1 to show the category list
+const orderButtons = new Map(); // order -> its tool button (only for the submenu currently shown)
+const catButtons = []; // per top-level group: { btn, current, caret }
 const mkSpan = (cls, text) => {
   const s = document.createElement("span");
   s.className = cls;
@@ -59,7 +62,29 @@ const mkSpan = (cls, text) => {
   return s;
 };
 
-// One category button per category along the menubar.
+// Flat hotkey map across all groups (the dig tools carry 1–7 today) -> where the tool lives.
+const HOTKEYS = new Map();
+CATEGORIES.forEach((cat, t) => {
+  const groups = cat.orders ? [[-1, cat.orders]] : cat.children.map((s, si) => [si, s.orders]);
+  for (const [sub, orders] of groups)
+    for (const o of orders) if (o.hotkey) HOTKEYS.set(o.hotkey, { order: o, top: t, sub });
+});
+
+// Locate a tool in the menu tree: { top, sub } indices (sub = -1 for leaf groups).
+function locate(o) {
+  for (let t = 0; t < CATEGORIES.length; t++) {
+    const c = CATEGORIES[t];
+    if (c.orders) {
+      if (c.orders.includes(o)) return { top: t, sub: -1 };
+    } else {
+      const s = c.children.findIndex((sub) => sub.orders.includes(o));
+      if (s >= 0) return { top: t, sub: s };
+    }
+  }
+  return { top: -1, sub: -1 };
+}
+
+// One group button per top-level category along the menubar.
 CATEGORIES.forEach((cat, ci) => {
   const btn = document.createElement("button");
   btn.className = "category";
@@ -68,51 +93,99 @@ CATEGORIES.forEach((cat, ci) => {
   const caret = mkSpan("cat-caret", "▴");
   btn.append(mkSpan("cat-glyph", cat.glyph), mkSpan("cat-label", cat.label), current, caret);
   btn.addEventListener("click", () => {
-    setOpenCat(openCat === ci ? -1 : ci); // toggle this category; only one open at a time
+    setOpenCat(openCat === ci ? -1 : ci); // toggle this group; only one open at a time
     btn.blur();
   });
   menubar.appendChild(btn);
   catButtons.push({ btn, current, caret });
 });
 
-// (Re)populate the submenu (#orderbar) with the tool boxes of category `ci`.
+// A tool box (glyph over label over hotkey) for the open submenu.
+function appendOrder(o) {
+  const btn = document.createElement("button");
+  btn.className = "order";
+  btn.style.setProperty("--order-accent", o.accent);
+  btn.title = o.hotkey ? `${o.label} (${o.hotkey})` : o.label;
+  btn.append(mkSpan("glyph", o.glyph), mkSpan("label", o.label), mkSpan("key", o.hotkey || ""));
+  btn.addEventListener("click", () => {
+    setTool(o); // picking a tool leaves the submenu open, like DF
+    btn.blur(); // hand keyboard focus back to the map
+  });
+  orderbar.appendChild(btn);
+  orderButtons.set(o, btn);
+  btn.classList.toggle("active", o === currentTool);
+}
+
+// A row chip (glyph + label + optional caret) used inside the orderbar to navigate sub-categories.
+function appendNavChip(glyph, label, accent, caret, onClick) {
+  const btn = document.createElement("button");
+  btn.className = "category";
+  btn.style.setProperty("--order-accent", accent || "#9aa0a6");
+  btn.append(mkSpan("cat-glyph", glyph), mkSpan("cat-label", label));
+  if (caret) btn.append(mkSpan("cat-caret", caret));
+  btn.addEventListener("click", () => {
+    onClick();
+    btn.blur();
+  });
+  orderbar.appendChild(btn);
+}
+
+// (Re)populate the submenu (#orderbar) for the open group `ci`, honoring openSub for branches.
 function buildSubmenu(ci) {
   orderbar.replaceChildren();
   orderButtons.clear();
-  for (const o of CATEGORIES[ci].orders) {
-    const btn = document.createElement("button");
-    btn.className = "order";
-    btn.style.setProperty("--order-accent", o.accent);
-    btn.title = o.hotkey ? `${o.label} (${o.hotkey})` : o.label;
-    btn.append(mkSpan("glyph", o.glyph), mkSpan("label", o.label), mkSpan("key", o.hotkey || ""));
-    btn.addEventListener("click", () => {
-      setTool(o); // picking a tool leaves the submenu open, like DF
-      btn.blur(); // hand keyboard focus back to the map
+  const cat = CATEGORIES[ci];
+  if (cat.children) {
+    if (openSub < 0) {
+      // Branch group: list its sub-categories; clicking one descends to that category's tools.
+      cat.children.forEach((sub, si) =>
+        appendNavChip(sub.glyph, sub.label, sub.accent, "▸", () => {
+          openSub = si;
+          buildSubmenu(ci);
+        })
+      );
+      return;
+    }
+    // A sub-category is open: a back chip to the category list, then that category's tool boxes.
+    appendNavChip("◂", cat.label, cat.accent, "", () => {
+      openSub = -1;
+      buildSubmenu(ci);
     });
-    orderbar.appendChild(btn);
-    orderButtons.set(o, btn);
-    btn.classList.toggle("active", o === currentTool);
+    cat.children[openSub].orders.forEach(appendOrder);
+    return;
   }
+  cat.orders.forEach(appendOrder); // leaf group: tool boxes directly
+}
+
+// Sync the menubar buttons + orderbar visibility to the current openCat/openSub.
+function renderOpen() {
+  orderbar.classList.toggle("hidden", openCat < 0);
+  if (openCat >= 0) buildSubmenu(openCat);
+  catButtons.forEach((c, i) => {
+    c.btn.classList.toggle("active", i === openCat);
+    c.caret.textContent = i === openCat ? "▾" : "▴";
+  });
 }
 
 function setOpenCat(ci) {
   openCat = ci;
-  orderbar.classList.toggle("hidden", ci < 0);
-  if (ci >= 0) buildSubmenu(ci);
-  catButtons.forEach((c, i) => {
-    c.btn.classList.toggle("active", i === ci);
-    c.caret.textContent = i === ci ? "▾" : "▴";
-  });
+  // Opening a branch jumps straight to the armed tool's sub-category if it lives there, else the
+  // category list. Leaf groups have no sub-level.
+  openSub =
+    ci >= 0 && CATEGORIES[ci].children
+      ? CATEGORIES[ci].children.findIndex((s) => s.orders.includes(currentTool))
+      : -1;
+  renderOpen();
 }
 
 function setTool(o) {
   currentTool = o;
   for (const [ord, b] of orderButtons) b.classList.toggle("active", ord === o);
-  // Reflect the armed tool on its category button (label + accent), so the collapsed bar reads right.
-  const ci = CATEGORIES.findIndex((c) => c.orders.includes(o));
-  if (ci >= 0) {
-    catButtons[ci].current.textContent = o.label;
-    catButtons[ci].btn.style.setProperty("--order-accent", o.accent);
+  // Reflect the armed tool on its top-level button (label + accent), so the collapsed bar reads right.
+  const { top } = locate(o);
+  if (top >= 0) {
+    catButtons[top].current.textContent = o.label;
+    catButtons[top].btn.style.setProperty("--order-accent", o.accent);
   }
 }
 
@@ -332,21 +405,26 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape" && openCat >= 0) {
-    setOpenCat(-1);
+    if (CATEGORIES[openCat].children && openSub >= 0) {
+      openSub = -1; // step back from a sub-category to the build category list
+      buildSubmenu(openCat);
+    } else {
+      setOpenCat(-1); // collapse the menu
+    }
     e.preventDefault();
     return;
   }
-  // Number keys pick a tool by hotkey across categories (currently the dig tools 1–7); selecting
-  // one opens its category so the submenu shows the choice.
-  for (let ci = 0; ci < CATEGORIES.length; ci++) {
-    const ord = CATEGORIES[ci].orders.find((o) => o.hotkey === e.key);
-    if (ord) {
-      setOpenCat(ci);
-      setTool(ord);
-      setStatus(`tool: ${ord.label}`);
-      e.preventDefault();
-      return;
-    }
+  // Number keys pick a tool by hotkey across all groups (currently the dig tools 1–7); selecting
+  // one opens the group (and sub-category) holding it so the submenu shows the choice.
+  const hit = HOTKEYS.get(e.key);
+  if (hit) {
+    openCat = hit.top;
+    openSub = hit.sub;
+    renderOpen();
+    setTool(hit.order);
+    setStatus(`tool: ${hit.order.label}`);
+    e.preventDefault();
+    return;
   }
   const PAN = 2;
   switch (e.key) {
